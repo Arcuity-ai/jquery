@@ -1,7 +1,11 @@
 QUnit.module( "selector", {
 	beforeEach: function() {
-		this.safari = /\bsafari\b/i.test( navigator.userAgent ) &&
-			!/\b(?:headless)?chrome\b/i.test( navigator.userAgent );
+
+		// Playwright WebKit on macOS doesn't expose `Safari` in its user agent
+		// string; use the "AppleWebKit" token. This token is also present
+		// in the Chromium UA, but it is locked to an older version there.
+		// Modern WebKit (Safari 13+) locks it to `605.1.15`.
+		this.safari = /\bapplewebkit\/605\.1\.15\b/i.test( navigator.userAgent );
 	},
 	afterEach: moduleTeardown
 } );
@@ -31,8 +35,8 @@ QUnit.test( "empty", function( assert ) {
 QUnit.test( "star", function( assert ) {
 	assert.expect( 2 );
 
-	var good, i;
-	var all = jQuery( "*" );
+	var good, i,
+		all = jQuery( "*" );
 
 	assert.ok( all.length >= 30, "Select all" );
 	good = true;
@@ -47,8 +51,8 @@ QUnit.test( "star", function( assert ) {
 QUnit.test( "element", function( assert ) {
 	assert.expect( 37 );
 
-	var i, lengthtest, siblingTest, html;
-	var fixture = document.getElementById( "qunit-fixture" );
+	var i, lengthtest, siblingTest, html,
+		fixture = document.getElementById( "qunit-fixture" );
 
 	assert.deepEqual( jQuery( "p", fixture ).get(), q( "firstp", "ap", "sndp", "en", "sap", "first" ), "Finding elements with a Node context." );
 	assert.deepEqual( jQuery( "p", "#qunit-fixture" ).get(), q( "firstp", "ap", "sndp", "en", "sap", "first" ), "Finding elements with a selector context." );
@@ -105,8 +109,8 @@ QUnit.test( "element", function( assert ) {
 	}
 
 	assert.t( "Checking sort order", "#qunit-fixture p, #qunit-fixture p a",
-		[ "firstp", "simon1", "ap", "google", "groups", "anchor1", "mark", "sndp", "en", "yahoo",
-			"sap", "anchor2", "simon", "first" ] );
+		[ "firstp", "john1", "ap", "google", "groups", "anchor1", "mozilla", "sndp", "en", "yahoo",
+			"sap", "anchor2", "timmy", "first" ] );
 
 	// Test Conflict ID
 	lengthtest = document.getElementById( "lengthtest" );
@@ -117,19 +121,13 @@ QUnit.test( "element", function( assert ) {
 	assert.deepEqual( jQuery( "input[id='idTest']", lengthtest ).get(), q( "idTest" ),
 		"Finding elements with id of ID." );
 
-	if ( QUnit.jQuerySelectors ) {
-		siblingTest = document.getElementById( "siblingTest" );
-		assert.deepEqual( jQuery( "div em", siblingTest ).get(), [],
-			"Element-rooted QSA does not select based on document context" );
-		assert.deepEqual( jQuery( "div em, div em, div em:not(div em)", siblingTest ).get(), [],
-			"Element-rooted QSA does not select based on document context" );
-		assert.deepEqual( jQuery( "div em, em\\,", siblingTest ).get(), [],
-			"Escaped commas do not get treated with an id in element-rooted QSA" );
-	} else {
-		assert.ok( "skip", "Element-rooted QSA behavior different in selector-native" );
-		assert.ok( "skip", "Element-rooted QSA behavior different in selector-native" );
-		assert.ok( "skip", "Element-rooted QSA behavior different in selector-native" );
-	}
+	siblingTest = document.getElementById( "siblingTest" );
+	assert.deepEqual( jQuery( "div em", siblingTest ).get(), [],
+		"Element-rooted QSA does not select based on document context" );
+	assert.deepEqual( jQuery( "div em, div em, div em:not(div em)", siblingTest ).get(), [],
+		"Element-rooted QSA does not select based on document context" );
+	assert.deepEqual( jQuery( "div em, em\\,", siblingTest ).get(), [],
+		"Escaped commas do not get treated with an id in element-rooted QSA" );
 
 	html = "";
 	for ( i = 0; i < 100; i++ ) {
@@ -228,14 +226,14 @@ QUnit.test( "broken selectors throw", function( assert ) {
 } );
 
 QUnit.test( "id", function( assert ) {
-	assert.expect( 34 );
+	assert.expect( 35 );
 
-	var fiddle, a;
+	var fiddle, a, lengthtest;
 
 	assert.t( "ID Selector", "#body", [ "body" ] );
 	assert.t( "ID Selector w/ Element", "body#body", [ "body" ] );
 	assert.t( "ID Selector w/ Element", "ul#first", [] );
-	assert.t( "ID selector with existing ID descendant", "#firstp #simon1", [ "simon1" ] );
+	assert.t( "ID selector with existing ID descendant", "#firstp #john1", [ "john1" ] );
 	assert.t( "ID selector with non-existent descendant", "#firstp #foobar", [] );
 	assert.t( "ID selector using UTF8", "#台北Táiběi", [ "台北Táiběi" ] );
 	assert.t( "Multiple ID selectors using UTF8", "#台北Táiběi, #台北", [ "台北Táiběi", "台北" ] );
@@ -259,12 +257,8 @@ QUnit.test( "id", function( assert ) {
 	fiddle = jQuery( "<div id='fiddle\\Foo'><span id='fiddleSpan'></span></div>" )
 		.appendTo( "#qunit-fixture" );
 
-	if ( QUnit.jQuerySelectors ) {
-		assert.deepEqual( jQuery( "> span", jQuery( "#fiddle\\\\Foo" )[ 0 ] ).get(),
-			q( [ "fiddleSpan" ] ), "Escaped ID as context" );
-	} else {
-		assert.ok( "skip", "leading > not supported in selector-native" );
-	}
+	assert.deepEqual( jQuery( "> span", jQuery( "#fiddle\\\\Foo" )[ 0 ] ).get(),
+		q( [ "fiddleSpan" ] ), "Escaped ID as context" );
 
 	fiddle.remove();
 
@@ -289,6 +283,15 @@ QUnit.test( "id", function( assert ) {
 
 	assert.t( "ID Selector on Form with an input that has a name of 'id'", "#lengthtest", [ "lengthtest" ] );
 
+	// Run the above test again but with `jQuery.find` directly to avoid the jQuery
+	// quick path that avoids running the selector engine.
+	lengthtest = jQuery.find( "#lengthtest" );
+	assert.strictEqual(
+		lengthtest && lengthtest[ 0 ],
+		document.getElementById( "lengthtest" ),
+		"ID Selector on Form with an input that has a name of 'id' - no quick path (#lengthtest)"
+	);
+
 	assert.t( "ID selector with non-existent ancestor", "#asdfasdf #foobar", [] ); // bug trac-986
 
 	assert.deepEqual( jQuery( "div#form", document.body ).get(), [],
@@ -304,19 +307,19 @@ QUnit.test( "class", function( assert ) {
 	assert.expect( 32 );
 
 	assert.deepEqual( jQuery( ".blog", document.getElementsByTagName( "p" ) ).get(),
-		q( "mark", "simon" ), "Finding elements with a context." );
+		q( "mozilla", "timmy" ), "Finding elements with a context." );
 	assert.deepEqual( jQuery( ".blog", "p" ).get(),
-		q( "mark", "simon" ), "Finding elements with a context." );
+		q( "mozilla", "timmy" ), "Finding elements with a context." );
 	assert.deepEqual( jQuery( ".blog", jQuery( "p" ) ).get(),
-		q( "mark", "simon" ), "Finding elements with a context." );
+		q( "mozilla", "timmy" ), "Finding elements with a context." );
 	assert.deepEqual( jQuery( "p" ).find( ".blog" ).get(),
-		q( "mark", "simon" ), "Finding elements with a context." );
+		q( "mozilla", "timmy" ), "Finding elements with a context." );
 
-	assert.t( "Class Selector", ".blog", [ "mark", "simon" ] );
+	assert.t( "Class Selector", ".blog", [ "mozilla", "timmy" ] );
 	assert.t( "Class Selector", ".GROUPS", [ "groups" ] );
-	assert.t( "Class Selector", ".blog.link", [ "simon" ] );
-	assert.t( "Class Selector w/ Element", "a.blog", [ "mark", "simon" ] );
-	assert.t( "Parent Class Selector", "p .blog", [ "mark", "simon" ] );
+	assert.t( "Class Selector", ".blog.link", [ "timmy" ] );
+	assert.t( "Class Selector w/ Element", "a.blog", [ "mozilla", "timmy" ] );
+	assert.t( "Parent Class Selector", "p .blog", [ "mozilla", "timmy" ] );
 
 	assert.t( "Class selector using UTF8", ".台北Táiběi", [ "utf8class1" ] );
 	assert.t( "Class selector using UTF8", ".台北", [ "utf8class1", "utf8class2" ] );
@@ -400,7 +403,7 @@ QUnit.test( "name", function( assert ) {
 } );
 
 QUnit.test( "comma-separated", function( assert ) {
-	assert.expect( 4 );
+	assert.expect( 10 );
 
 	var fixture = jQuery( "<div><h2><span></span></h2><div><p><span></span></p><p></p></div></div>" );
 
@@ -408,6 +411,26 @@ QUnit.test( "comma-separated", function( assert ) {
 	assert.equal( fixture.find( "h2, div p" ).filter( "h2" ).length, 1, "has to find one <h2>" );
 	assert.equal( fixture.find( "h2 , div p" ).filter( "p" ).length, 2, "has to find two <p>" );
 	assert.equal( fixture.find( "h2 , div p" ).filter( "h2" ).length, 1, "has to find one <h2>" );
+	assert.equal( fixture.find( "h2 ,div p" ).filter( "p" ).length, 2, "has to find two <p>" );
+	assert.equal( fixture.find( "h2 ,div p" ).filter( "h2" ).length, 1, "has to find one <h2>" );
+	assert.equal( fixture.find( "h2,div p" ).filter( "p" ).length, 2, "has to find two <p>" );
+	assert.equal( fixture.find( "h2,div p" ).filter( "h2" ).length, 1, "has to find one <h2>" );
+	assert.equal( fixture.find( "h2\t,\rdiv p" ).filter( "p" ).length, 2, "has to find two <p>" );
+	assert.equal( fixture.find( "h2\t,\rdiv p" ).filter( "h2" ).length, 1, "has to find one <h2>" );
+} );
+
+QUnit.test( "comma-separated, only supported natively (gh-5177)", function( assert ) {
+	assert.expect( 5 );
+
+	var fixture = jQuery( "<div><input/><span></span></div>" );
+
+	fixture.appendTo( "#qunit-fixture" );
+
+	assert.equal( fixture.find( "input:valid, span" ).length, 2, "has to find two elements" );
+	assert.equal( fixture.find( "input:valid , span" ).length, 2, "has to find two elements" );
+	assert.equal( fixture.find( "input:valid ,span" ).length, 2, "has to find two elements" );
+	assert.equal( fixture.find( "input:valid,span" ).length, 2, "has to find two elements" );
+	assert.equal( fixture.find( "input:valid\t,\rspan" ).length, 2, "has to find two elements" );
 } );
 
 QUnit.test( "child and adjacent", function( assert ) {
@@ -415,11 +438,11 @@ QUnit.test( "child and adjacent", function( assert ) {
 
 	var siblingFirst, en, nothiddendiv;
 
-	assert.t( "Child", "p > a", [ "simon1", "google", "groups", "mark", "yahoo", "simon" ] );
-	assert.t( "Child minus leading whitespace", "p> a", [ "simon1", "google", "groups", "mark", "yahoo", "simon" ] );
-	assert.t( "Child minus trailing whitespace", "p >a", [ "simon1", "google", "groups", "mark", "yahoo", "simon" ] );
-	assert.t( "Child minus whitespace", "p>a", [ "simon1", "google", "groups", "mark", "yahoo", "simon" ] );
-	assert.t( "Child w/ Class", "p > a.blog", [ "mark", "simon" ] );
+	assert.t( "Child", "p > a", [ "john1", "google", "groups", "mozilla", "yahoo", "timmy" ] );
+	assert.t( "Child minus leading whitespace", "p> a", [ "john1", "google", "groups", "mozilla", "yahoo", "timmy" ] );
+	assert.t( "Child minus trailing whitespace", "p >a", [ "john1", "google", "groups", "mozilla", "yahoo", "timmy" ] );
+	assert.t( "Child minus whitespace", "p>a", [ "john1", "google", "groups", "mozilla", "yahoo", "timmy" ] );
+	assert.t( "Child w/ Class", "p > a.blog", [ "mozilla", "timmy" ] );
 	assert.t( "All Children", "code > *", [ "anchor1", "anchor2" ] );
 	assert.selectInFixture( "All Grandchildren", "p > * > *", [ "anchor1", "anchor2" ] );
 
@@ -434,7 +457,7 @@ QUnit.test( "child and adjacent", function( assert ) {
 	assert.t( "#id adjacent", "#firstp + p", [ "ap" ] );
 	assert.t( "Tag#id adjacent", "p#firstp + p", [ "ap" ] );
 	assert.t( "Tag[attr] adjacent", "p[lang=en] + p", [ "sap" ] );
-	assert.t( "Tag.class adjacent", "a.GROUPS + code + a", [ "mark" ] );
+	assert.t( "Tag.class adjacent", "a.GROUPS + code + a", [ "mozilla" ] );
 	assert.t( "Comma, Child, and Adjacent", "#qunit-fixture a + a, code > a",
 		[ "groups", "anchor1", "anchor2", "tName2ID" ] );
 
@@ -442,22 +465,17 @@ QUnit.test( "child and adjacent", function( assert ) {
 		[ "foo", "nothiddendiv", "moretests", "tabindex-tests", "liveHandlerOrder", "siblingTest", "fx-test-group" ] );
 	assert.t( "Element Preceded By", "#first ~ div",
 		[ "moretests", "tabindex-tests", "liveHandlerOrder", "siblingTest", "fx-test-group" ] );
-	assert.t( "Element Preceded By", "#groups ~ a", [ "mark" ] );
+	assert.t( "Element Preceded By", "#groups ~ a", [ "mozilla" ] );
 	assert.t( "Element Preceded By", "#length ~ input", [ "idTest" ] );
 	assert.t( "Element Preceded By", "#siblingfirst ~ em", [ "siblingnext", "siblingthird" ] );
 	assert.t( "Element Preceded By (multiple)", "#siblingTest em ~ em ~ em ~ span", [ "siblingspan" ] );
 
 	siblingFirst = document.getElementById( "siblingfirst" );
 
-	if ( QUnit.jQuerySelectors ) {
-		assert.deepEqual( jQuery( "+ em", siblingFirst ).get(), q( "siblingnext" ),
-			"Element Directly Preceded By with a context." );
-		assert.deepEqual( jQuery( "~ em", siblingFirst ).get(), q( "siblingnext", "siblingthird" ),
-			"Element Preceded By with a context." );
-	} else {
-		assert.ok( "skip", "leading + not supported in selector-native" );
-		assert.ok( "skip", "leading ~ not supported in selector-native" );
-	}
+	assert.deepEqual( jQuery( "+ em", siblingFirst ).get(), q( "siblingnext" ),
+		"Element Directly Preceded By with a context." );
+	assert.deepEqual( jQuery( "~ em", siblingFirst ).get(), q( "siblingnext", "siblingthird" ),
+		"Element Preceded By with a context." );
 
 	if ( QUnit.jQuerySelectorsPos ) {
 		assert.deepEqual( jQuery( "~ em:first", siblingFirst ).get(), q( "siblingnext" ),
@@ -466,16 +484,11 @@ QUnit.test( "child and adjacent", function( assert ) {
 		assert.ok( "skip", "Positional selectors are not supported" );
 	}
 
-	if ( QUnit.jQuerySelectors ) {
-		en = document.getElementById( "en" );
-		assert.deepEqual( jQuery( "+ p, a", en ).get(), q( "yahoo", "sap" ),
-			"Compound selector with context, beginning with sibling test." );
-		assert.deepEqual( jQuery( "a, + p", en ).get(), q( "yahoo", "sap" ),
-			"Compound selector with context, containing sibling test." );
-	} else {
-		assert.ok( "skip", "leading + not supported in selector-native" );
-		assert.ok( "skip", "leading + not supported in selector-native" );
-	}
+	en = document.getElementById( "en" );
+	assert.deepEqual( jQuery( "+ p, a", en ).get(), q( "yahoo", "sap" ),
+		"Compound selector with context, beginning with sibling test." );
+	assert.deepEqual( jQuery( "a, + p", en ).get(), q( "yahoo", "sap" ),
+		"Compound selector with context, containing sibling test." );
 
 	if ( QUnit.jQuerySelectors ) {
 		assert.t( "Element Preceded By, Containing", "#liveHandlerOrder ~ div em:contains('1')", [ "siblingfirst" ] );
@@ -524,7 +537,7 @@ QUnit.test( "attributes - existence", function( assert ) {
 	assert.t( "On any element", "#qunit-fixture *[title]", [ "google" ] );
 	assert.t( "On implicit element", "#qunit-fixture [title]", [ "google" ] );
 	assert.t( "Boolean", "#select2 option[selected]", [ "option2d" ] );
-	assert.t( "For attribute on label", "form label[for]", [ "label-for" ] );
+	assert.t( "For attribute on label", "#qunit-fixture form label[for]", [ "label-for" ] );
 } );
 
 QUnit.test( "attributes - equals", function( assert ) {
@@ -532,10 +545,10 @@ QUnit.test( "attributes - equals", function( assert ) {
 
 	var withScript;
 
-	assert.t( "Identifier", "#qunit-fixture a[rel=bookmark]", [ "simon1" ] );
+	assert.t( "Identifier", "#qunit-fixture a[rel=bookmark]", [ "john1" ] );
 	assert.t( "Identifier with underscore", "input[id=types_all]", [ "types_all" ] );
-	assert.t( "String", "#qunit-fixture a[rel='bookmark']", [ "simon1" ] );
-	assert.t( "String (whitespace ignored)", "#qunit-fixture a[ rel = 'bookmark' ]", [ "simon1" ] );
+	assert.t( "String", "#qunit-fixture a[rel='bookmark']", [ "john1" ] );
+	assert.t( "String (whitespace ignored)", "#qunit-fixture a[ rel = 'bookmark' ]", [ "john1" ] );
 	assert.t( "Non-identifier string", "#qunit-fixture a[href='https://www.google.com/']", [ "google" ] );
 	assert.t( "Empty string", "#select1 option[value='']", [ "option1a" ] );
 
@@ -603,13 +616,13 @@ QUnit.test( "attributes - contains", function( assert ) {
 	assert.t( "string (whitespace ignored)", "a[href *= 'google']", [ "google", "groups" ] );
 	assert.t( "string like '[' ... ']']", "input[name*='[bar]']", [ "hidden2" ] );
 	assert.t( "string containing '['...']", "input[name*='foo[bar]']", [ "hidden2" ] );
-	assert.t( "href contains hash", "p a[href*='#']", [ "simon1", "anchor2" ] );
+	assert.t( "href contains hash", "p a[href*='#']", [ "john1", "anchor2" ] );
 } );
 
 QUnit.test( "attributes - ends with", function( assert ) {
 	assert.expect( 4 );
 
-	assert.t( "string (whitespace ignored)", "a[href $= 'org/']", [ "mark" ] );
+	assert.t( "string (whitespace ignored)", "a[href $= 'org/']", [ "mozilla" ] );
 	assert.t( "string ending with ']'", "input[name$='bar]']", [ "hidden2" ] );
 	assert.t( "string like '[' ... ']'", "input[name$='[bar]']", [ "hidden2" ] );
 	assert.t( "Attribute containing []", "input[name$='foo[bar]']", [ "hidden2" ] );
@@ -784,9 +797,9 @@ QUnit.test( "pseudo - (first|last|only)-(child|of-type)", function( assert ) {
 	assert.t( "First Child (case-insensitive)", "#qunit-fixture p:FIRST-CHILD", [ "firstp", "sndp" ] );
 
 	assert.t( "Last Child", "#qunit-fixture p:last-child", [ "sap" ] );
-	assert.t( "Last Child (leading id)", "#qunit-fixture a:last-child", [ "simon1", "anchor1", "mark", "yahoo", "anchor2", "simon", "liveLink1", "liveLink2" ] );
+	assert.t( "Last Child (leading id)", "#qunit-fixture a:last-child", [ "john1", "anchor1", "mozilla", "yahoo", "anchor2", "timmy", "liveLink1", "liveLink2" ] );
 
-	assert.t( "Only Child", "#qunit-fixture a:only-child", [ "simon1", "anchor1", "yahoo", "anchor2", "liveLink1", "liveLink2" ] );
+	assert.t( "Only Child", "#qunit-fixture a:only-child", [ "john1", "anchor1", "yahoo", "anchor2", "liveLink1", "liveLink2" ] );
 
 	assert.t( "First-of-type", "#qunit-fixture > p:first-of-type", [ "firstp" ] );
 	assert.t( "Last-of-type", "#qunit-fixture > p:last-of-type", [ "first" ] );
@@ -844,6 +857,7 @@ QUnit.test( "pseudo - nth-child", function( assert ) {
 			"Seeded nth-child"
 		);
 	} else {
+
 		// Support: Chrome 75+, Firefox 67+
 		// Some browsers mark disconnected elements as matching `:nth-child(n)`
 		// so let's skip the test.
@@ -897,6 +911,7 @@ QUnit.test( "pseudo - nth-last-child", function( assert ) {
 			"Seeded nth-last-child"
 		);
 	} else {
+
 		// Support: Chrome 75+, Firefox 67+
 		// Some browsers mark disconnected elements as matching `:nth-last-child(n)`
 		// so let's skip the test.
@@ -907,13 +922,13 @@ QUnit.test( "pseudo - nth-last-child", function( assert ) {
 QUnit.test( "pseudo - nth-of-type", function( assert ) {
 	assert.expect( 9 );
 	assert.t( "Nth-of-type(-1)", ":nth-of-type(-1)", [] );
-	assert.t( "Nth-of-type(3)", "#ap :nth-of-type(3)", [ "mark" ] );
-	assert.t( "Nth-of-type(n)", "#ap :nth-of-type(n)", [ "google", "groups", "code1", "anchor1", "mark" ] );
-	assert.t( "Nth-of-type(0n+3)", "#ap :nth-of-type(0n+3)", [ "mark" ] );
+	assert.t( "Nth-of-type(3)", "#ap :nth-of-type(3)", [ "mozilla" ] );
+	assert.t( "Nth-of-type(n)", "#ap :nth-of-type(n)", [ "google", "groups", "code1", "anchor1", "mozilla" ] );
+	assert.t( "Nth-of-type(0n+3)", "#ap :nth-of-type(0n+3)", [ "mozilla" ] );
 	assert.t( "Nth-of-type(2n)", "#ap :nth-of-type(2n)", [ "groups" ] );
 	assert.t( "Nth-of-type(even)", "#ap :nth-of-type(even)", [ "groups" ] );
-	assert.t( "Nth-of-type(2n+1)", "#ap :nth-of-type(2n+1)", [ "google", "code1", "anchor1", "mark" ] );
-	assert.t( "Nth-of-type(odd)", "#ap :nth-of-type(odd)", [ "google", "code1", "anchor1", "mark" ] );
+	assert.t( "Nth-of-type(2n+1)", "#ap :nth-of-type(2n+1)", [ "google", "code1", "anchor1", "mozilla" ] );
+	assert.t( "Nth-of-type(odd)", "#ap :nth-of-type(odd)", [ "google", "code1", "anchor1", "mozilla" ] );
 	assert.t( "Nth-of-type(-n+2)", "#qunit-fixture > :nth-of-type(-n+2)", [ "firstp", "ap", "foo", "nothiddendiv", "name+value", "firstUL", "empty", "form", "floatTest", "iframe", "lengthtest", "table", "last" ] );
 } );
 
@@ -921,22 +936,22 @@ QUnit.test( "pseudo - nth-last-of-type", function( assert ) {
 	assert.expect( 9 );
 	assert.t( "Nth-last-of-type(-1)", ":nth-last-of-type(-1)", [] );
 	assert.t( "Nth-last-of-type(3)", "#ap :nth-last-of-type(3)", [ "google" ] );
-	assert.t( "Nth-last-of-type(n)", "#ap :nth-last-of-type(n)", [ "google", "groups", "code1", "anchor1", "mark" ] );
+	assert.t( "Nth-last-of-type(n)", "#ap :nth-last-of-type(n)", [ "google", "groups", "code1", "anchor1", "mozilla" ] );
 	assert.t( "Nth-last-of-type(0n+3)", "#ap :nth-last-of-type(0n+3)", [ "google" ] );
 	assert.t( "Nth-last-of-type(2n)", "#ap :nth-last-of-type(2n)", [ "groups" ] );
 	assert.t( "Nth-last-of-type(even)", "#ap :nth-last-of-type(even)", [ "groups" ] );
-	assert.t( "Nth-last-of-type(2n+1)", "#ap :nth-last-of-type(2n+1)", [ "google", "code1", "anchor1", "mark" ] );
-	assert.t( "Nth-last-of-type(odd)", "#ap :nth-last-of-type(odd)", [ "google", "code1", "anchor1", "mark" ] );
+	assert.t( "Nth-last-of-type(2n+1)", "#ap :nth-last-of-type(2n+1)", [ "google", "code1", "anchor1", "mozilla" ] );
+	assert.t( "Nth-last-of-type(odd)", "#ap :nth-last-of-type(odd)", [ "google", "code1", "anchor1", "mozilla" ] );
 	assert.t( "Nth-last-of-type(-n+2)", "#qunit-fixture > :nth-last-of-type(-n+2)", [ "ap", "name+value", "first", "firstUL", "empty", "floatTest", "iframe", "table", "testForm", "disabled-tests", "siblingTest", "fx-test-group", "last" ] );
 } );
 
 QUnit[ QUnit.jQuerySelectors ? "test" : "skip" ]( "pseudo - has", function( assert ) {
 	assert.expect( 4 );
 
-	assert.t( "Basic test", "p:has(a)", [ "firstp", "ap", "en", "sap" ] );
-	assert.t( "Basic test (irrelevant whitespace)", "p:has( a )", [ "firstp", "ap", "en", "sap" ] );
-	assert.t( "Nested with overlapping candidates",
-		"#qunit-fixture div:has(div:has(div:not([id])))",
+	assert.selectInFixture( "Basic test", "p:has(a)", [ "firstp", "ap", "en", "sap" ] );
+	assert.selectInFixture( "Basic test (irrelevant whitespace)", "p:has( a )", [ "firstp", "ap", "en", "sap" ] );
+	assert.selectInFixture( "Nested with overlapping candidates",
+		"div:has(div:has(div:not([id])))",
 		[ "moretests", "t2037", "fx-test-group", "fx-queue" ] );
 
 	// Support: Safari 15.4+, Chrome 105+
@@ -945,8 +960,8 @@ QUnit[ QUnit.jQuerySelectors ? "test" : "skip" ]( "pseudo - has", function( asse
 	// return no results. Make sure this is accounted for. (gh-5098)
 	// Note: Chrome 105 has this behavior only in 105.0.5195.125 or newer;
 	// initially it shipped with a fully forgiving parsing in `:has()`.
-	assert.t( "Nested with list arguments",
-		"#qunit-fixture div:has(faketag, div:has(faketag, div:not([id])))",
+	assert.selectInFixture( "Nested with list arguments",
+		"div:has(faketag, div:has(faketag, div:not([id])))",
 		[ "moretests", "t2037", "fx-test-group", "fx-queue" ] );
 } );
 
@@ -954,7 +969,7 @@ QUnit[ QUnit.jQuerySelectors ? "test" : "skip" ]( "pseudo - contains", function(
 	assert.expect( 9 );
 
 	var gh335 = document.getElementById( "qunit-fixture" ).appendChild(
-		document.createElement( "mark" ) );
+		document.createElement( "mozilla" ) );
 	gh335.id = "gh-335";
 	gh335.appendChild( document.createTextNode( "raw line 1\nline 2" ) );
 
@@ -972,7 +987,7 @@ QUnit[ QUnit.jQuerySelectors ? "test" : "skip" ]( "pseudo - contains", function(
 		"span:contains(\"\\\"'\\53F0 \\5317 Ta\\301 ibe\\30C i\")",
 		[ "utf8class1" ] );
 
-	assert.t( "collapsed whitespace", "mark:contains('line 1\\A line')", [ "gh-335" ] );
+	assert.t( "collapsed whitespace", "mozilla:contains('line 1\\A line')", [ "gh-335" ] );
 } );
 
 QUnit.test( "pseudo - misc", function( assert ) {
@@ -1033,6 +1048,7 @@ QUnit.test( "pseudo - misc", function( assert ) {
 	tmp = document.createElement( "div" );
 	tmp.id = "tmp_input";
 	tmp.innerHTML = "<span>Hello I am focusable.</span>";
+
 	// Setting tabIndex should make the element focusable
 	// https://html.spec.whatwg.org/#the-tabindex-attribute
 	document.body.appendChild( tmp );
@@ -1089,9 +1105,10 @@ QUnit.test( "pseudo - misc", function( assert ) {
 	);
 
 	if ( QUnit.jQuerySelectors ) {
+
 		// Tokenization edge cases
-		assert.t( "Sequential pseudos", "#qunit-fixture p:has(:contains(mark)):has(code)", [ "ap" ] );
-		assert.t( "Sequential pseudos", "#qunit-fixture p:has(:contains(mark)):has(code):contains(This link)", [ "ap" ] );
+		assert.t( "Sequential pseudos", "#qunit-fixture p:has(:contains(mozilla)):has(code)", [ "ap" ] );
+		assert.t( "Sequential pseudos", "#qunit-fixture p:has(:contains(mozilla)):has(code):contains(This link)", [ "ap" ] );
 
 		assert.t( "Pseudo argument containing ')'", "p:has(>a.GROUPS[src!=')'])", [ "ap" ] );
 		assert.t( "Pseudo argument containing ')'", "p:has(>a.GROUPS[src!=')'])", [ "ap" ] );
@@ -1101,7 +1118,7 @@ QUnit.test( "pseudo - misc", function( assert ) {
 		assert.t( "Multi-pseudo", "#ap:has(*), #ap:has(*)", [ "ap" ] );
 		assert.t( "Multi-pseudo with leading nonexistent id", "#nonexistent:has(*), #ap:has(*)", [ "ap" ] );
 
-		assert.t( "Tokenization stressor", "a[class*=blog]:not(:has(*, :contains(!)), :contains(!)), br:contains(]), p:contains(]):not(.qunit-source), :not(:empty):not(:parent):not(.qunit-source)", [ "ap", "mark", "yahoo", "simon" ] );
+		assert.t( "Tokenization stressor", "a[class*=blog]:not(:has(*, :contains(!)), :contains(!)), br:contains(]), p:contains(]):not(.qunit-source), :not(:empty):not(:parent):not(.qunit-source)", [ "ap", "mozilla", "yahoo", "timmy" ] );
 	} else {
 		assert.ok( "skip", ":has not supported in selector-native" );
 		assert.ok( "skip", ":has not supported in selector-native" );
@@ -1129,7 +1146,7 @@ QUnit.test( "pseudo - misc", function( assert ) {
 QUnit.test( "pseudo - :not", function( assert ) {
 	assert.expect( 43 );
 
-	assert.t( "Not", "a.blog:not(.link)", [ "mark" ] );
+	assert.t( "Not", "a.blog:not(.link)", [ "mozilla" ] );
 
 	if ( QUnit.jQuerySelectors ) {
 		assert.t( "Not - multiple", "#form option:not(:contains(Nothing),#option1b,:selected)", [ "option1c", "option1d", "option2b", "option2c", "option3d", "option3e", "option4e", "option5b", "option5c" ] );
@@ -1140,7 +1157,7 @@ QUnit.test( "pseudo - :not", function( assert ) {
 	}
 
 	if ( QUnit.jQuerySelectorsPos ) {
-		assert.t( ":not() with :first", "#foo p:not(:first) .link", [ "simon" ] );
+		assert.t( ":not() with :first", "#foo p:not(:first) .link", [ "timmy" ] );
 	} else {
 		assert.ok( "skip", "Positional selectors are not supported" );
 	}
@@ -1154,6 +1171,7 @@ QUnit.test( "pseudo - :not", function( assert ) {
 		assert.t( ":not() failing interior", "#qunit-fixture p:not(div#blargh)", [ "firstp", "ap", "sndp", "en", "sap", "first" ] );
 		assert.t( ":not() failing interior", "#qunit-fixture p:not(p#blargh)", [ "firstp", "ap", "sndp", "en", "sap", "first" ] );
 	} else {
+
 		// Support: IE 11+
 		// IE doesn't support `:not(complex selector)`.
 		assert.ok( "skip", ":not(complex selector) not supported in selector-native" );
@@ -1174,6 +1192,7 @@ QUnit.test( "pseudo - :not", function( assert ) {
 		assert.t( ":not Multiple", "p:not(p,a)", [] );
 		assert.t( ":not Multiple", "p:not(a,p,b)", [] );
 	} else {
+
 		// Support: IE 11+
 		// IE doesn't support `:not(complex selector)`.
 		assert.ok( "skip", ":not(complex selector) not supported in selector-native" );
@@ -1203,6 +1222,7 @@ QUnit.test( "pseudo - :not", function( assert ) {
 	if ( QUnit.jQuerySelectors || !QUnit.isIE ) {
 		assert.t( ":not() Multiple Class", "#foo a:not(.blog.link)", [ "yahoo", "anchor2" ] );
 	} else {
+
 		// Support: IE 11+
 		// IE doesn't support `:not(complex selector)`.
 		assert.ok( "skip", ":not(complex selector) not supported in selector-native" );
@@ -1388,16 +1408,12 @@ QUnit.test( "pseudo - :(dis|en)abled, explicitly disabled", function( assert ) {
 			"disabled-select", "disabled-optgroup", "disabled-option" ]
 	);
 
-	if ( QUnit.jQuerySelectors ) {
-		assert.t(
-			"Enabled elements",
-			"#enabled-fieldset :enabled",
-			[ "enabled-input", "enabled-textarea", "enabled-button",
-				"enabled-select", "enabled-optgroup", "enabled-option" ]
-		);
-	} else {
-		assert.ok( "skip", ":enabled broken in Chrome in selector-native" );
-	}
+	assert.t(
+		"Enabled elements",
+		"#enabled-fieldset :enabled",
+		[ "enabled-input", "enabled-textarea", "enabled-button",
+			"enabled-select", "enabled-optgroup", "enabled-option" ]
+	);
 } );
 
 QUnit.test( "pseudo - :(dis|en)abled, optgroup and option", function( assert ) {
@@ -1439,8 +1455,7 @@ QUnit.test( "pseudo - a:(dis|en)abled", function( assert ) {
 	assert.expect( 2 );
 
 	var enabled, disabled,
-		container = jQuery( "<div></div>" ),
-		anchor = jQuery( "<a href='#'>Link</a>" );
+		container = jQuery( "<div></div>" );
 
 	container.appendTo( "#qunit-fixture" );
 
@@ -1474,7 +1489,7 @@ QUnit.test( "pseudo - :target and :root", function( assert ) {
 } );
 
 QUnit.test( "pseudo - :lang", function( assert ) {
-	assert.expect( QUnit.jQuerySelectors ? 105 : 55 );
+	assert.expect( QUnit.jQuerySelectors ? 104 : 54 );
 
 	var docElem = document.documentElement,
 		docXmlLang = docElem.getAttribute( "xml:lang" ),
@@ -1547,8 +1562,18 @@ QUnit.test( "pseudo - :lang", function( assert ) {
 	anchor.parentNode.lang = "ara";
 	anchor.lang = "ara\\b";
 	assert.deepEqual( jQuery( ":lang(ara\\b)", foo ).get(), [], ":lang respects backslashes" );
-	assert.deepEqual( jQuery( ":lang(ara\\\\b)", foo ).get(), [ anchor ],
-		":lang respects escaped backslashes" );
+
+	// Support: Firefox 114+
+	// Firefox 114+ no longer match on backslashes in `:lang()`, even when escaped.
+	// It is an intentional change as `:lang()` parameters are supposed to be valid
+	// BCP 47 strings. Therefore, we won't attempt to patch it.
+	// We'll keep this test here until other browsers match the behavior.
+	// See https://bugzilla.mozilla.org/show_bug.cgi?id=1839747#c1
+	// See https://github.com/w3c/csswg-drafts/issues/8720#issuecomment-1509242961
+	//
+	// assert.deepEqual( jQuery( ":lang(ara\\\\b)", foo ).get(), [ anchor ],
+	// 	":lang respects escaped backslashes" );
+
 	assert.throws( function() {
 		jQuery( "#qunit-fixture:lang(c++)" );
 	}, ":lang value must be a valid identifier" );
@@ -1582,7 +1607,7 @@ QUnit.test( "context", function( assert ) {
 
 	var context,
 		selector = ".blog",
-		expected = q( "mark", "simon" ),
+		expected = q( "mozilla", "timmy" ),
 		iframe = document.getElementById( "iframe" ),
 		iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
 
@@ -1613,11 +1638,7 @@ QUnit.test( "context", function( assert ) {
 	context = document.getElementById( "nothiddendiv" );
 	assert.deepEqual( jQuery( "*", context ).get(), q( "nothiddendivchild" ), "<div> context" );
 
-	if ( QUnit.jQuerySelectors ) {
-		assert.deepEqual( jQuery( "* > *", context ).get(), [], "<div> context (no results)" );
-	} else {
-		assert.ok( "skip", "The whole selector not required to be under context in selector-native" );
-	}
+	assert.deepEqual( jQuery( "* > *", context ).get(), [], "<div> context (no results)" );
 
 	context.removeAttribute( "id" );
 	assert.deepEqual( jQuery( "*", context ).get(), q( "nothiddendivchild" ), "no-id element context" );
@@ -1646,20 +1667,14 @@ QUnit.test( "context", function( assert ) {
 	expected = q( "siblingnext", "siblingspan" );
 	context.appendChild( document.getElementById( "siblingTest" ) );
 
-	if ( QUnit.jQuerySelectors ) {
-		assert.deepEqual(
-			jQuery( "em:nth-child(2)", context ).get(),
-			expected.slice( 0, 1 ),
-			"DocumentFragment context"
-		);
-		assert.deepEqual( jQuery( "span", context ).get(), expected.slice( 1 ),
-			"DocumentFragment context by tag name" );
-		assert.deepEqual( jQuery( "p", context ).get(), [], "DocumentFragment context (no results)" );
-	} else {
-		assert.ok( "skip", "selection on document fragments not supported in selector-native" );
-		assert.ok( "skip", "selection on document fragments not supported in selector-native" );
-		assert.ok( "skip", "selection on document fragments not supported in selector-native" );
-	}
+	assert.deepEqual(
+		jQuery( "em:nth-child(2)", context ).get(),
+		expected.slice( 0, 1 ),
+		"DocumentFragment context"
+	);
+	assert.deepEqual( jQuery( "span", context ).get(), expected.slice( 1 ),
+		"DocumentFragment context by tag name" );
+	assert.deepEqual( jQuery( "p", context ).get(), [], "DocumentFragment context (no results)" );
 
 	if ( QUnit.jQuerySelectors ) {
 		assert.deepEqual(
@@ -1710,15 +1725,15 @@ QUnit.test( "caching does not introduce bugs", function( assert ) {
 
 	jQuery( ":not(code)", document.getElementById( "ap" ) );
 	assert.deepEqual(
-		jQuery( ":not(code)", document.getElementById( "foo" ) ).get(),
-		q( "sndp", "en", "yahoo", "sap", "anchor2", "simon" ),
+		jQuery.find( ":not(code)", document.getElementById( "foo" ) ),
+		q( "sndp", "en", "yahoo", "sap", "anchor2", "timmy" ),
 		"Reusing selector with new context"
 	);
 
 	if ( QUnit.jQuerySelectorsPos ) {
 		assert.t( "Deep ancestry caching in post-positional element matcher (jQuery trac-14657)",
 			"#qunit-fixture a:lt(3):parent",
-			[ "simon1", "google", "groups" ] );
+			[ "john1", "google", "groups" ] );
 	} else {
 		assert.ok( "skip", "Positional selectors are not supported" );
 	}
@@ -1751,13 +1766,11 @@ QUnit[ QUnit.jQuerySelectors ? "test" : "skip" ]( "disconnected nodes", function
 
 // Support: IE 11+
 // IE doesn't support Shadow DOM.
-// selector-native doesn't support querying inside of Shadow DOM.
-QUnit[ QUnit.jQuerySelectors && !QUnit.isIE ? "test" : "skip" ](
-	"Shadow DOM nodes supported as root", function( assert ) {
+QUnit.testUnlessIE( "Shadow DOM nodes supported as root", function( assert ) {
 	assert.expect( 2 );
 
-	var shadowHost = jQuery( "<div></div>" ).appendTo( "#qunit-fixture" )[ 0 ];
-	var shadowRoot = shadowHost.attachShadow( { mode: "open" } );
+	var shadowHost = jQuery( "<div></div>" ).appendTo( "#qunit-fixture" )[ 0 ],
+		shadowRoot = shadowHost.attachShadow( { mode: "open" } );
 
 	shadowRoot.innerHTML = "<div class='vagabond'><p></p></div>";
 	assert.equal( jQuery( shadowRoot ).find( ".vagabond" ).length, 1,
@@ -1769,7 +1782,7 @@ QUnit[ QUnit.jQuerySelectors && !QUnit.isIE ? "test" : "skip" ](
 testIframe(
 	"attributes - jQuery.attr",
 	"selector/html5_selector.html",
-	function( assert, jQuery, window, document ) {
+	function( assert, jQuery, _window, document ) {
 		assert.expect( 38 );
 
 		/**
@@ -1842,7 +1855,7 @@ testIframe(
 
 		// Enumerated attributes (these are not boolean content attributes)
 		jQuery.expandedEach = jQuery.each;
-		jQuery.expandedEach( [ "draggable", "contenteditable", "aria-disabled" ], function( i, val ) {
+		jQuery.expandedEach( [ "draggable", "contenteditable", "aria-disabled" ], function( _i, val ) {
 			t( "Enumerated attribute", "[" + val + "]", [ "div1" ] );
 		} );
 		t( "Enumerated attribute", "[spellcheck]", [ "span1" ] );
@@ -1852,61 +1865,6 @@ testIframe(
 		t( "Improperly named form elements do not interfere with form selections (trac-9570)", "form[name='formName']", [ "form1" ] );
 	}
 );
-
-QUnit.test( "jQuery.contains", function( assert ) {
-	assert.expect( 16 );
-
-	var container = document.getElementById( "nonnodes" ),
-		element = container.firstChild,
-		text = element.nextSibling,
-		nonContained = container.nextSibling,
-		detached = document.createElement( "a" );
-	assert.ok( element && element.nodeType === 1, "preliminary: found element" );
-	assert.ok( text && text.nodeType === 3, "preliminary: found text" );
-	assert.ok( nonContained, "preliminary: found non-descendant" );
-	assert.ok( jQuery.contains( container, element ), "child" );
-	assert.ok( jQuery.contains( container.parentNode, element ), "grandchild" );
-	assert.ok( jQuery.contains( container, text ), "text child" );
-	assert.ok( jQuery.contains( container.parentNode, text ), "text grandchild" );
-	assert.ok( !jQuery.contains( container, container ), "self" );
-	assert.ok( !jQuery.contains( element, container ), "parent" );
-	assert.ok( !jQuery.contains( container, nonContained ), "non-descendant" );
-	assert.ok( !jQuery.contains( container, document ), "document" );
-	assert.ok( !jQuery.contains( container, document.documentElement ), "documentElement (negative)" );
-	assert.ok( !jQuery.contains( container, null ), "Passing null does not throw an error" );
-	assert.ok( jQuery.contains( document, document.documentElement ), "documentElement (positive)" );
-	assert.ok( jQuery.contains( document, element ), "document container (positive)" );
-	assert.ok( !jQuery.contains( document, detached ), "document container (negative)" );
-} );
-
-QUnit.test( "jQuery.contains in SVG (jQuery trac-10832)", function( assert ) {
-	assert.expect( 4 );
-
-	var svg = jQuery(
-		"<svg xmlns='http://www.w3.org/2000/svg' version='1.1' height='1' width='1'>" +
-		"<g><circle cx='1' cy='1' r='1' /></g>" +
-		"</svg>"
-	).appendTo( "#qunit-fixture" )[ 0 ];
-
-	assert.ok( jQuery.contains( svg, svg.firstChild ), "root child" );
-	assert.ok( jQuery.contains( svg.firstChild, svg.firstChild.firstChild ), "element child" );
-	assert.ok( jQuery.contains( svg, svg.firstChild.firstChild ), "root granchild" );
-	assert.ok( !jQuery.contains( svg.firstChild.firstChild, svg.firstChild ),
-		"parent (negative)" );
-} );
-
-QUnit.testUnlessIE( "jQuery.contains within <template/> doesn't throw (gh-5147)", function( assert ) {
-	assert.expect( 1 );
-
-	var template = jQuery( "<template><div><div class='a'></div></div></template>" ),
-		a = jQuery( template[ 0 ].content ).find( ".a" );
-
-	template.appendTo( "#qunit-fixture" );
-
-	jQuery.contains( a[ 0 ].ownerDocument, a[ 0 ] );
-
-	assert.ok( true, "Didn't throw" );
-} );
 
 QUnit.test( "find in document fragments", function( assert ) {
 	assert.expect( 1 );
@@ -2041,7 +1999,7 @@ QUnit.test( "uniqueSort()", function( assert ) {
 testIframe(
 	"jQuery.uniqueSort works cross-window (trac-14381)",
 	"selector/mixed_sort.html",
-	function( assert, jQuery, window, document, actual, expected ) {
+	function( assert, _jQuery, _window, _document, actual, expected ) {
 		assert.expect( 1 );
 
 		assert.deepEqual( actual, expected, "Mixed array was sorted correctly" );
@@ -2228,7 +2186,7 @@ QUnit[ QUnit.jQuerySelectors ? "test" : "skip" ]( "custom pseudos", function( as
 				return !!elem.id;
 			};
 		} );
-		assert.t( "Custom element filter", "#foo :aristotlean", [ "sndp", "en", "yahoo", "sap", "anchor2", "simon" ] );
+		assert.t( "Custom element filter", "#foo :aristotlean", [ "sndp", "en", "yahoo", "sap", "anchor2", "timmy" ] );
 	} finally {
 		delete jQuery.expr.filters.aristotlean;
 	}
@@ -2277,4 +2235,233 @@ QUnit[ QUnit.jQuerySelectors ? "test" : "skip" ]( "custom pseudos", function( as
 	} finally {
 		delete jQuery.expr.filters.slice;
 	}
+} );
+
+QUnit.test( "jQuery.find.matchesSelector", function( assert ) {
+	assert.expect( 15 );
+
+	var link = document.getElementById( "john1" ),
+		input = document.getElementById( "text1" ),
+		option = document.getElementById( "option1a" ),
+		disconnected = document.createElement( "div" );
+
+	link.title = "Don't click me";
+	assert.ok( jQuery.find.matchesSelector( link, "[rel='bookmark']" ), "attribute-equals string" );
+	assert.ok( jQuery.find.matchesSelector( link, "[rel=bookmark]" ), "attribute-equals identifier" );
+	assert.ok( jQuery.find.matchesSelector( link, "[\nrel = bookmark\t]" ),
+		"attribute-equals identifier (whitespace ignored)" );
+	assert.ok( jQuery.find.matchesSelector( link, "a[title=\"Don't click me\"]" ),
+		"attribute-equals string containing single quote" );
+
+	// trac-12303
+	input.setAttribute( "data-pos", ":first" );
+	assert.ok( jQuery.find.matchesSelector( input, "input[data-pos=\\:first]" ),
+		"attribute-equals POS in identifier" );
+	assert.ok( jQuery.find.matchesSelector( input, "input[data-pos=':first']" ),
+		"attribute-equals POS in string" );
+	if ( QUnit.jQuerySelectors ) {
+		assert.ok( jQuery.find.matchesSelector( input, ":input[data-pos=':first']" ),
+			"attribute-equals POS in string after pseudo" );
+	} else {
+		assert.ok( "skip", ":input not supported in selector-native" );
+	}
+
+	option.setAttribute( "test", "" );
+	assert.ok( jQuery.find.matchesSelector( option, "[id=option1a]" ),
+		"id attribute-equals identifier" );
+	if ( QUnit.jQuerySelectors ) {
+		assert.ok( jQuery.find.matchesSelector( option, "[id*=option1][type!=checkbox]" ),
+			"attribute-not-equals identifier" );
+	} else {
+		assert.ok( "skip", "[key!=value] not supported in selector-native" );
+	}
+	assert.ok( jQuery.find.matchesSelector( option, "[id*=option1]" ), "attribute-contains identifier" );
+	assert.ok( !jQuery.find.matchesSelector( option, "[test^='']" ),
+		"attribute-starts-with empty string (negative)" );
+
+	option.className = "=]";
+	assert.ok( jQuery.find.matchesSelector( option, ".\\=\\]" ),
+		"class selector with attribute-equals confusable" );
+
+	assert.ok( jQuery.find.matchesSelector( disconnected, "div" ), "disconnected element" );
+	assert.ok( jQuery.find.matchesSelector( link, "* > *" ), "child combinator matches in document" );
+	assert.ok( !jQuery.find.matchesSelector( disconnected, "* > *" ), "child combinator fails in fragment" );
+} );
+
+QUnit.test( "jQuery.find.matches", function( assert ) {
+	assert.expect( 4 );
+
+	var iframeChild,
+		input = document.getElementById( "text1" ),
+		div = document.createElement( "div" ),
+		iframe = document.getElementById( "iframe" ),
+		iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+
+	assert.deepEqual( jQuery.find.matches( "input", [ input ] ), [ input ],
+		"jQuery.find.matches with seed of input element" );
+	assert.deepEqual( jQuery.find.matches( "div", [ div ] ), [ div ],
+		"jQuery.find.matches with disconnected element" );
+
+	iframeDoc.open();
+	iframeDoc.write( "<body><div id='foo'><div id='bar'></div></div></body>" );
+	iframeDoc.close();
+
+	iframeChild = iframeDoc.getElementById( "bar" );
+
+	assert.deepEqual(
+		jQuery.find.matches( ":root > body > #foo > #bar", [ iframeChild ] ),
+		[ iframeChild ],
+		"jQuery.find.matches infers context from element"
+	);
+
+	assert.deepEqual(
+		jQuery.find.matches( ":root *", [ div, iframeChild, input ] ),
+		[ iframeChild, input ],
+		"jQuery.find.matches infers context from each seed element"
+	);
+} );
+
+QUnit[ QUnit.jQuerySelectors ? "test" : "skip" ]( "jQuery.find.select with pre-compiled function", function( assert ) {
+	assert.expect( 6 );
+
+	supportjQuery.each( [
+		"#qunit-fixture #first",
+		"ol#listWithTabIndex > li[tabindex]",
+		"#liveSpan1"
+	], function( _i, selector ) {
+		var compiled = jQuery.find.compile( selector );
+		assert.equal( jQuery.find.select( compiled, document ).length,
+			1, "Should match using a compiled selector function" );
+		assert.equal(
+			jQuery.find.select( compiled, jQuery( "#first" )[ 0 ] ).length,
+			0, "Should not match with different context" );
+	} );
+} );
+
+// Internal, but we test it for backwards compatibility for edge cases
+QUnit[ QUnit.jQuerySelectors ? "test" : "skip" ]( "jQuery.find.tokenize", function( assert ) {
+	assert.expect( 1 );
+
+	var selector = "#id .class > div[prop=\"value\"] + input:nth-child(1):button, span:contains(\"Text\") ~ div:has(div:has(span)):not(.not-this.not-that > div)",
+		tokens = [
+			[
+				{
+					"value": "#id",
+					"type": "ID",
+					"matches": [
+						"id"
+					]
+				},
+				{
+					"value": " ",
+					"type": " "
+				},
+				{
+					"value": ".class",
+					"type": "CLASS",
+					"matches": [
+						"class"
+					]
+				},
+				{
+					"value": " > ",
+					"type": ">"
+				},
+				{
+					"value": "div",
+					"type": "TAG",
+					"matches": [
+						"div"
+					]
+				},
+				{
+					"value": "[prop=\"value\"]",
+					"type": "ATTR",
+					"matches": [
+						"prop",
+						"=",
+						"value"
+					]
+				},
+				{
+					"value": " + ",
+					"type": "+"
+				},
+				{
+					"value": "input",
+					"type": "TAG",
+					"matches": [
+						"input"
+					]
+				},
+				{
+					"value": ":nth-child(1)",
+					"type": "CHILD",
+					"matches": [
+						"nth",
+						"child",
+						"1",
+						0,
+						1,
+						undefined,
+						"",
+						"1"
+					]
+				},
+				{
+					"value": ":button",
+					"type": "PSEUDO",
+					"matches": [
+						"button",
+						undefined
+					]
+				}
+			],
+			[
+				{
+					"value": "span",
+					"type": "TAG",
+					"matches": [
+						"span"
+					]
+				},
+				{
+					"value": ":contains(\"Text\")",
+					"type": "PSEUDO",
+					"matches": [
+						"contains",
+						"Text"
+					]
+				},
+				{
+					"value": " ~ ",
+					"type": "~"
+				},
+				{
+					"value": "div",
+					"type": "TAG",
+					"matches": [
+						"div"
+					]
+				},
+				{
+					"value": ":has(div:has(span))",
+					"type": "PSEUDO",
+					"matches": [
+						"has",
+						"div:has(span)"
+					]
+				},
+				{
+					"value": ":not(.not-this.not-that > div)",
+					"type": "PSEUDO",
+					"matches": [
+						"not",
+						".not-this.not-that > div"
+					]
+				}
+			]
+		];
+
+	assert.deepEqual( jQuery.find.tokenize( selector ), tokens, "Tokenization successful" );
 } );

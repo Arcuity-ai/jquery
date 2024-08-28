@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Keep in sync with /test/middleware-mockserver.js
+ * Keep in sync with /test/middleware-mockserver.cjs
  */
 function cleanCallback( $callback ) {
 	return preg_replace( '/[^a-z0-9_]/i', '', $callback );
@@ -95,9 +95,9 @@ QUnit.assert.ok( true, "mock executed");';
 		}
 
 		if ( isset( $req->query['array'] ) ) {
-			echo '[{"name":"John","age":21},{"name":"Peter","age":25}]';
+			echo '[ {"name": "John", "age": 21}, {"name": "Peter", "age": 25 } ]';
 		} else {
-			echo '{"data":{"lang":"en","length":25}}';
+			echo '{ "data": {"lang": "en", "length": 25} }';
 		}
 	}
 
@@ -112,8 +112,8 @@ QUnit.assert.ok( true, "mock executed");';
 			$callback = $_POST['callback'];
 		}
 		$json = isset( $req->query['array'] ) ?
-			'[{"name":"John","age":21},{"name":"Peter","age":25}]' :
-			'{"data":{"lang":"en","length":25}}';
+			'[ { "name": "John", "age": 21 }, { "name": "Peter", "age": 25 } ]' :
+			'{ "data": { "lang": "en", "length": 25 } }';
 		echo cleanCallback( $callback ) . '(' . $json . ')';
 	}
 
@@ -122,6 +122,17 @@ QUnit.assert.ok( true, "mock executed");';
 		$cleanCallback = cleanCallback( $callback );
 		$text = json_encode( file_get_contents( __DIR__ . '/with_fries.xml' ) );
 		echo "$cleanCallback($text)\n";
+	}
+
+	protected function formData( $req ) {
+		$prefix = 'multipart/form-data; boundary=--';
+		$contentTypeValue = $req->headers[ 'CONTENT-TYPE' ];
+		if ( substr( $contentTypeValue, 0, strlen( $prefix ) ) === $prefix ) {
+			echo 'key1 -> ' . $_POST[ 'key1' ] . ', key2 -> ' . $_POST[ 'key2' ];
+		} else {
+			echo 'Incorrect Content-Type: ' . $contentTypeValue .
+				"\nExpected prefix: " . $prefix;
+		}
 	}
 
 	protected function error( $req ) {

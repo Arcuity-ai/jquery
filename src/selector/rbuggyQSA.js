@@ -1,8 +1,10 @@
-import isIE from "../var/isIE.js";
-import whitespace from "../var/whitespace.js";
-import support from "./support.js";
+import { isIE } from "../var/isIE.js";
+import { whitespace } from "../var/whitespace.js";
+import { support } from "./support.js";
 
-var rbuggyQSA = [];
+// Build QSA regex.
+// Regex strategy adopted from Diego Perini.
+export var rbuggyQSA = [];
 
 if ( isIE ) {
 	rbuggyQSA.push(
@@ -21,18 +23,15 @@ if ( isIE ) {
 	);
 }
 
-if ( !support.cssSupportsSelector ) {
+if ( !support.cssHas ) {
 
-	// Support: Chrome 105+, Safari 15.4+
-	// `:has()` uses a forgiving selector list as an argument so our regular
-	// `try-catch` mechanism fails to catch `:has()` with arguments not supported
-	// natively like `:has(:contains("Foo"))`. Where supported & spec-compliant,
-	// we now use `CSS.supports("selector(SELECTOR_TO_BE_TESTED)")` but outside
-	// that, let's mark `:has` as buggy to always use jQuery traversal for
-	// `:has()`.
+	// Support: Chrome 105 - 110+, Safari 15.4 - 16.3+
+	// Our regular `try-catch` mechanism fails to detect natively-unsupported
+	// pseudo-classes inside `:has()` (such as `:has(:contains("Foo"))`)
+	// in browsers that parse the `:has()` argument as a forgiving selector list.
+	// https://drafts.csswg.org/selectors/#relational now requires the argument
+	// to be parsed unforgivingly, but browsers have not yet fully adjusted.
 	rbuggyQSA.push( ":has" );
 }
 
 rbuggyQSA = rbuggyQSA.length && new RegExp( rbuggyQSA.join( "|" ) );
-
-export default rbuggyQSA;

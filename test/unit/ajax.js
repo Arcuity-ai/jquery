@@ -71,35 +71,91 @@ QUnit.module( "ajax", {
 		};
 	} );
 
-	ajaxTest( "jQuery.ajax() - custom attributes for script tag", 5,
-		function( assert ) {
-			return {
-				create: function( options ) {
-					var xhr;
-					options.method = "POST";
-					options.dataType = "script";
-					options.scriptAttrs = { id: "jquery-ajax-test", async: "async" };
-					xhr = jQuery.ajax( url( "mock.php?action=script" ), options );
-					assert.equal( jQuery( "#jquery-ajax-test" ).attr( "async" ), "async", "attr value" );
-					return xhr;
-				},
-				beforeSend: function( _jqXhr, settings ) {
-					assert.strictEqual( settings.type, "GET", "Type changed to GET" );
-				},
-				success: function() {
-					assert.ok( true, "success" );
-				},
-				complete: function() {
-					assert.ok( true, "complete" );
-				}
-			};
-		}
-	);
+	jQuery.each( [ " - Same Domain", " - Cross Domain" ], function( crossDomain, label ) {
+		ajaxTest( "jQuery.ajax() - custom attributes for script tag" + label, 5,
+			function( assert ) {
+				return {
+					create: function( options ) {
+						var xhr;
+						options.crossDomain = crossDomain;
+						options.method = "POST";
+						options.dataType = "script";
+						options.scriptAttrs = { id: "jquery-ajax-test", async: "async" };
+						xhr = jQuery.ajax( url( "mock.php?action=script" ), options );
+						assert.equal( jQuery( "#jquery-ajax-test" ).attr( "async" ), "async", "attr value" );
+						return xhr;
+					},
+					beforeSend: function( _jqXhr, settings ) {
+						assert.strictEqual( settings.type, "GET", "Type changed to GET" );
+					},
+					success: function() {
+						assert.ok( true, "success" );
+					},
+					complete: function() {
+						assert.ok( true, "complete" );
+					}
+				};
+			}
+		);
+
+		ajaxTest( "jQuery.ajax() - headers for script transport" + label, 3,
+			function( assert ) {
+				return {
+					create: function( options ) {
+						Globals.register( "corsCallback" );
+						window.corsCallback = function( response ) {
+							assert.strictEqual( response.headers[ "x-custom-test-header" ],
+								"test value", "Custom header sent" );
+						};
+						options.crossDomain = crossDomain;
+						options.dataType = "script";
+						options.headers = { "x-custom-test-header": "test value" };
+						return jQuery.ajax( url( "mock.php?action=script&callback=corsCallback" ), options );
+					},
+					success: function() {
+						assert.ok( true, "success" );
+					},
+					complete: function() {
+						assert.ok( true, "complete" );
+					}
+				};
+			}
+		);
+
+		ajaxTest( "jQuery.ajax() - scriptAttrs winning over headers" + label, 4,
+			function( assert ) {
+				return {
+					create: function( options ) {
+						var xhr;
+						Globals.register( "corsCallback" );
+						window.corsCallback = function( response ) {
+							assert.ok( !response.headers[ "x-custom-test-header" ],
+								"headers losing with scriptAttrs" );
+						};
+						options.crossDomain = crossDomain;
+						options.dataType = "script";
+						options.scriptAttrs = { id: "jquery-ajax-test", async: "async" };
+						options.headers = { "x-custom-test-header": "test value" };
+						xhr = jQuery.ajax( url( "mock.php?action=script&callback=corsCallback" ), options );
+						assert.equal( jQuery( "#jquery-ajax-test" ).attr( "async" ), "async", "attr value" );
+						return xhr;
+					},
+					success: function() {
+						assert.ok( true, "success" );
+					},
+					complete: function() {
+						assert.ok( true, "complete" );
+					}
+				};
+			}
+		);
+	} );
 
 	ajaxTest( "jQuery.ajax() - execute JS when dataType option is provided", 3,
 		function( assert ) {
 			return {
 				create: function( options ) {
+					Globals.register( "corsCallback" );
 					options.crossDomain = true;
 					options.dataType = "script";
 					return jQuery.ajax( url( "mock.php?action=script&header=ecma" ), options );
@@ -341,7 +397,7 @@ QUnit.module( "ajax", {
 		};
 	} );
 
-	ajaxTest( "jQuery.ajax() - URL fragment component preservation", 4, function( assert ) {
+	ajaxTest( "jQuery.ajax() - URL fragment component preservation", 5, function( assert ) {
 		return [
 			{
 				url: baseURL + "name.html#foo",
@@ -374,12 +430,32 @@ QUnit.module( "ajax", {
 				error: true
 			},
 			{
+				url: baseURL + "name.html?abc#foo",
+				data: [
+					{
+						name: "test",
+						value: 123
+					},
+					{
+						name: "devo",
+						value: "hat"
+					}
+				],
+				beforeSend: function( xhr, settings ) {
+					assert.equal( settings.url, baseURL + "name.html?abc&test=123&devo=hat#foo",
+						"hash preserved for request with query component and array data." );
+					return false;
+				},
+				error: true
+			},
+			{
 				url: baseURL + "name.html?abc#brownies",
 				data: {
 					"devo": "hat"
 				},
 				cache: false,
 				beforeSend: function( xhr, settings ) {
+
 					// Clear the cache-buster param value
 					var url = settings.url.replace( /_=[^&#]+/, "_=" );
 					assert.equal( url, baseURL + "name.html?abc&devo=hat&_=#brownies",
@@ -609,7 +685,7 @@ QUnit.module( "ajax", {
 			url: url( "404.txt" ),
 			beforeSend: nocallback( "beforeSend" ),
 			error: nocallback( "error" ),
-			complete:  nocallback( "complete" )
+			complete: nocallback( "complete" )
 		};
 	} );
 
@@ -798,8 +874,8 @@ QUnit.module( "ajax", {
 			success: function( data ) {
 				assert.ok( data.match( /^html text/ ), "Check content for datatype html" );
 				jQuery( "#ap" ).html( data );
-				assert.strictEqual( window[ "testFoo" ], "foo", "Check if script was evaluated for datatype html" );
-				assert.strictEqual( window[ "testBar" ], "bar", "Check if script src was evaluated for datatype html" );
+				assert.strictEqual( window.testFoo, "foo", "Check if script was evaluated for datatype html" );
+				assert.strictEqual( window.testBar, "bar", "Check if script src was evaluated for datatype html" );
 			}
 		};
 	} );
@@ -809,6 +885,7 @@ QUnit.module( "ajax", {
 		return {
 			dataType: "jsonp",
 			url: url( "mock.php?action=errorWithScript" ),
+
 			// error is the significant assertion
 			error: function( xhr ) {
 				var expected = { "status": 404, "msg": "Not Found" };
@@ -837,6 +914,7 @@ QUnit.module( "ajax", {
 				complete: function() {
 					jQuery.globalEval = globalEval;
 				},
+
 				// error is the significant assertion
 				error: function( xhr ) {
 					assert.strictEqual( xhr.status, 404, testMsg );
@@ -1096,8 +1174,8 @@ QUnit.module( "ajax", {
 					Globals.register( "functionToCleanUp" );
 					Globals.register( "XXX" );
 					Globals.register( "jsonpResults" );
-					window[ "jsonpResults" ] = function( data ) {
-						assert.ok( data[ "data" ], "JSON results returned (GET, custom callback function)" );
+					window.jsonpResults = function( data ) {
+						assert.ok( data.data, "JSON results returned (GET, custom callback function)" );
 					};
 				},
 				requests: [ {
@@ -1106,7 +1184,7 @@ QUnit.module( "ajax", {
 					crossDomain: crossDomain,
 					jsonp: "callback",
 					success: function( data ) {
-						assert.ok( data[ "data" ], "JSON results returned (GET, data obj callback)" );
+						assert.ok( data.data, "JSON results returned (GET, data obj callback)" );
 					}
 				}, {
 					url: baseURL + "mock.php?action=jsonp",
@@ -1115,7 +1193,7 @@ QUnit.module( "ajax", {
 					jsonpCallback: "jsonpResults",
 					success: function( data ) {
 						assert.strictEqual(
-							typeof window[ "jsonpResults" ],
+							typeof window.jsonpResults,
 							"function",
 							"should not rewrite original function"
 						);
@@ -1127,8 +1205,8 @@ QUnit.module( "ajax", {
 					crossDomain: crossDomain,
 					jsonpCallback: "functionToCleanUp",
 					success: function( data ) {
-						assert.ok( data[ "data" ], "JSON results returned (GET, custom callback name to be cleaned up)" );
-						assert.strictEqual( window[ "functionToCleanUp" ], true, "Callback was removed (GET, custom callback name to be cleaned up)" );
+						assert.ok( data.data, "JSON results returned (GET, custom callback name to be cleaned up)" );
+						assert.strictEqual( window.functionToCleanUp, true, "Callback was removed (GET, custom callback name to be cleaned up)" );
 						var xhr;
 						jQuery.ajax( {
 							url: baseURL + "mock.php?action=jsonp",
@@ -1142,7 +1220,7 @@ QUnit.module( "ajax", {
 						} );
 						xhr.fail( function() {
 							assert.ok( true, "Ajax error JSON (GET, custom callback name to be cleaned up)" );
-							assert.strictEqual( window[ "functionToCleanUp" ], true, "Callback was removed after early abort (GET, custom callback name to be cleaned up)" );
+							assert.strictEqual( window.functionToCleanUp, true, "Callback was removed after early abort (GET, custom callback name to be cleaned up)" );
 						} );
 					}
 				}, {
@@ -1155,7 +1233,7 @@ QUnit.module( "ajax", {
 						assert.ok( /action=jsonp&callback=XXX&_=\d+$/.test( this.url ), "The URL wasn't messed with (GET, custom callback name with no url manipulation)" );
 					},
 					success: function( data ) {
-						assert.ok( data[ "data" ], "JSON results returned (GET, custom callback name with no url manipulation)" );
+						assert.ok( data.data, "JSON results returned (GET, custom callback name with no url manipulation)" );
 					}
 				} ]
 			};
@@ -1192,7 +1270,7 @@ QUnit.module( "ajax", {
 					dataType: "jsonp",
 					crossDomain: crossDomain,
 					success: function( data ) {
-						assert.ok( data[ "data" ], "JSON results returned (POST, no callback)" );
+						assert.ok( data.data, "JSON results returned (POST, no callback)" );
 					}
 				},
 				{
@@ -1202,7 +1280,7 @@ QUnit.module( "ajax", {
 					dataType: "jsonp",
 					crossDomain: crossDomain,
 					success: function( data ) {
-						assert.ok( data[ "data" ], "JSON results returned (POST, data callback)" );
+						assert.ok( data.data, "JSON results returned (POST, data callback)" );
 					}
 				},
 				{
@@ -1212,7 +1290,7 @@ QUnit.module( "ajax", {
 					dataType: "jsonp",
 					crossDomain: crossDomain,
 					success: function( data ) {
-						assert.ok( data[ "data" ], "JSON results returned (POST, data obj callback)" );
+						assert.ok( data.data, "JSON results returned (POST, data obj callback)" );
 					}
 				}
 			];
@@ -1386,7 +1464,7 @@ QUnit.module( "ajax", {
 			url: url( "mock.php?action=testbar" ),
 			dataType: "script",
 			success: function() {
-				assert.strictEqual( window[ "testBar" ], "bar", "Script results returned (GET, no callback)" );
+				assert.strictEqual( window.testBar, "bar", "Script results returned (GET, no callback)" );
 			}
 		};
 	} );
@@ -1403,7 +1481,7 @@ QUnit.module( "ajax", {
 			type: "POST",
 			dataType: "script",
 			success: function( data, status ) {
-				assert.strictEqual( window[ "testBar" ], "bar", "Script results returned (POST, no callback)" );
+				assert.strictEqual( window.testBar, "bar", "Script results returned (POST, no callback)" );
 				assert.strictEqual( status, "success", "Script results returned (POST, no callback)" );
 			}
 		};
@@ -1417,7 +1495,7 @@ QUnit.module( "ajax", {
 			url: url( "mock.php?action=testbar" ),
 			dataType: "script",
 			success: function() {
-				assert.strictEqual( window[ "testBar" ], "bar", "Script results returned (GET, no callback)" );
+				assert.strictEqual( window.testBar, "bar", "Script results returned (GET, no callback)" );
 			}
 		};
 	} );
@@ -1433,43 +1511,92 @@ QUnit.module( "ajax", {
 		};
 	} );
 
-	ajaxTest( "jQuery.ajax() - JSON by content-type", 5, function( assert ) {
-		return {
-			url: baseURL + "mock.php?action=json",
-			data: {
-				"header": "json",
-				"array": "1"
+	ajaxTest( "jQuery.ajax() - JSON by content-type", 10, function( assert ) {
+		return [
+			{
+				url: baseURL + "mock.php?action=json",
+				data: {
+					"header": "json",
+					"array": "1"
+				},
+				success: function( json ) {
+					assert.ok( json.length >= 2, "Check length" );
+					assert.strictEqual( json[ 0 ].name, "John", "Check JSON: first, name" );
+					assert.strictEqual( json[ 0 ].age, 21, "Check JSON: first, age" );
+					assert.strictEqual( json[ 1 ].name, "Peter", "Check JSON: second, name" );
+					assert.strictEqual( json[ 1 ].age, 25, "Check JSON: second, age" );
+				}
 			},
-			success: function( json ) {
-				assert.ok( json.length >= 2, "Check length" );
-				assert.strictEqual( json[ 0 ][ "name" ], "John", "Check JSON: first, name" );
-				assert.strictEqual( json[ 0 ][ "age" ], 21, "Check JSON: first, age" );
-				assert.strictEqual( json[ 1 ][ "name" ], "Peter", "Check JSON: second, name" );
-				assert.strictEqual( json[ 1 ][ "age" ], 25, "Check JSON: second, age" );
+			{
+				url: baseURL + "mock.php?action=json",
+				data: [
+					{
+						name: "header",
+						value: "json"
+					},
+					{
+						name: "array",
+						value: "1"
+					}
+				],
+				success: function( json ) {
+					assert.ok( json.length >= 2, "Check length" );
+					assert.strictEqual( json[ 0 ].name, "John", "Check JSON: first, name" );
+					assert.strictEqual( json[ 0 ].age, 21, "Check JSON: first, age" );
+					assert.strictEqual( json[ 1 ].name, "Peter", "Check JSON: second, name" );
+					assert.strictEqual( json[ 1 ].age, 25, "Check JSON: second, age" );
+				}
 			}
-		};
+		];
 	} );
 
-	ajaxTest( "jQuery.ajax() - JSON by content-type disabled with options", 6, function( assert ) {
-		return {
-			url: url( "mock.php?action=json" ),
-			data: {
-				"header": "json",
-				"array": "1"
+	ajaxTest( "jQuery.ajax() - JSON by content-type disabled with options", 12, function( assert ) {
+		return [
+			{
+				url: url( "mock.php?action=json" ),
+				data: {
+					"header": "json",
+					"array": "1"
+				},
+				contents: {
+					"json": false
+				},
+				success: function( text ) {
+					assert.strictEqual( typeof text, "string", "json wasn't auto-determined" );
+					var json = JSON.parse( text );
+					assert.ok( json.length >= 2, "Check length" );
+					assert.strictEqual( json[ 0 ].name, "John", "Check JSON: first, name" );
+					assert.strictEqual( json[ 0 ].age, 21, "Check JSON: first, age" );
+					assert.strictEqual( json[ 1 ].name, "Peter", "Check JSON: second, name" );
+					assert.strictEqual( json[ 1 ].age, 25, "Check JSON: second, age" );
+				}
 			},
-			contents: {
-				"json": false
-			},
-			success: function( text ) {
-				assert.strictEqual( typeof text, "string", "json wasn't auto-determined" );
-				var json = JSON.parse( text );
-				assert.ok( json.length >= 2, "Check length" );
-				assert.strictEqual( json[ 0 ][ "name" ], "John", "Check JSON: first, name" );
-				assert.strictEqual( json[ 0 ][ "age" ], 21, "Check JSON: first, age" );
-				assert.strictEqual( json[ 1 ][ "name" ], "Peter", "Check JSON: second, name" );
-				assert.strictEqual( json[ 1 ][ "age" ], 25, "Check JSON: second, age" );
+			{
+				url: url( "mock.php?action=json" ),
+				data: [
+					{
+						name: "header",
+						value: "json"
+					},
+					{
+						name: "array",
+						value: "1"
+					}
+				],
+				contents: {
+					"json": false
+				},
+				success: function( text ) {
+					assert.strictEqual( typeof text, "string", "json wasn't auto-determined" );
+					var json = JSON.parse( text );
+					assert.ok( json.length >= 2, "Check length" );
+					assert.strictEqual( json[ 0 ].name, "John", "Check JSON: first, name" );
+					assert.strictEqual( json[ 0 ].age, 21, "Check JSON: first, age" );
+					assert.strictEqual( json[ 1 ].name, "Peter", "Check JSON: second, name" );
+					assert.strictEqual( json[ 1 ].age, 25, "Check JSON: second, age" );
+				}
 			}
-		};
+		];
 	} );
 
 	ajaxTest( "jQuery.ajax() - simple get", 1, function( assert ) {
@@ -1517,18 +1644,36 @@ QUnit.module( "ajax", {
 		};
 	} );
 
-	ajaxTest( "jQuery.ajax() - data - text/plain (gh-2658)", 1, function( assert ) {
-		return {
-			url: "bogus.html",
-			data: { devo: "A Beautiful World" },
-			type: "post",
-			contentType: "text/plain",
-			beforeSend: function( _, s ) {
-				assert.strictEqual( s.data, "devo=A%20Beautiful%20World", "data is %20-encoded" );
-				return false;
+	ajaxTest( "jQuery.ajax() - data - text/plain (gh-2658)", 2, function( assert ) {
+		return [
+			{
+				url: "bogus.html",
+				data: { devo: "A Beautiful World" },
+				type: "post",
+				contentType: "text/plain",
+				beforeSend: function( _, s ) {
+					assert.strictEqual( s.data, "devo=A%20Beautiful%20World", "data is %20-encoded" );
+					return false;
+				},
+				error: true
 			},
-			error: true
-		};
+			{
+				url: "bogus.html",
+				data: [
+					{
+						name: "devo",
+						value: "A Beautiful World"
+					}
+				],
+				type: "post",
+				contentType: "text/plain",
+				beforeSend: function( _, s ) {
+					assert.strictEqual( s.data, "devo=A%20Beautiful%20World", "data is %20-encoded" );
+					return false;
+				},
+				error: true
+			}
+		];
 	} );
 
 	ajaxTest( "jQuery.ajax() - don't escape %20 with contentType override (gh-4119)", 1, function( assert ) {
@@ -1577,34 +1722,82 @@ QUnit.module( "ajax", {
 		};
 	} );
 
-	ajaxTest( "jQuery.ajax() - data - no processing POST", 1, function( assert ) {
-		return {
-			url: "bogus.html",
-			data: { devo: "A Beautiful World" },
-			type: "post",
-			contentType: "x-special-sauce",
-			processData: false,
-			beforeSend: function( _, s ) {
-				assert.deepEqual( s.data, { devo: "A Beautiful World" }, "data is not processed" );
-				return false;
+	ajaxTest( "jQuery.ajax() - data - no processing POST", 2, function( assert ) {
+		return [
+			{
+				url: "bogus.html",
+				data: { devo: "A Beautiful World" },
+				type: "post",
+				contentType: "x-special-sauce",
+				processData: false,
+				beforeSend: function( _, s ) {
+					assert.deepEqual( s.data, { devo: "A Beautiful World" }, "data is not processed" );
+					return false;
+				},
+				error: true
 			},
-			error: true
-		};
+			{
+				url: "bogus.html",
+				data: [
+					{
+						name: "devo",
+						value: "A Beautiful World"
+					}
+				],
+				type: "post",
+				contentType: "x-special-sauce",
+				processData: false,
+				beforeSend: function( _, s ) {
+					assert.deepEqual( s.data, [
+						{
+							name: "devo",
+							value: "A Beautiful World"
+						}
+					], "data is not processed" );
+					return false;
+				},
+				error: true
+			}
+		];
 	} );
 
-	ajaxTest( "jQuery.ajax() - data - no processing GET", 1, function( assert ) {
-		return {
-			url: "bogus.html",
-			data: { devo: "A Beautiful World" },
-			type: "get",
-			contentType: "x-something-else",
-			processData: false,
-			beforeSend: function( _, s ) {
-				assert.deepEqual( s.data, { devo: "A Beautiful World" }, "data is not processed" );
-				return false;
+	ajaxTest( "jQuery.ajax() - data - no processing GET", 2, function( assert ) {
+		return [
+			{
+				url: "bogus.html",
+				data: { devo: "A Beautiful World" },
+				type: "get",
+				contentType: "x-something-else",
+				processData: false,
+				beforeSend: function( _, s ) {
+					assert.deepEqual( s.data, { devo: "A Beautiful World" }, "data is not processed" );
+					return false;
+				},
+				error: true
 			},
-			error: true
-		};
+			{
+				url: "bogus.html",
+				data: [
+					{
+						name: "devo",
+						value: "A Beautiful World"
+					}
+				],
+				type: "get",
+				contentType: "x-something-else",
+				processData: false,
+				beforeSend: function( _, s ) {
+					assert.deepEqual( s.data, [
+						{
+							name: "devo",
+							value: "A Beautiful World"
+						}
+					], "data is not processed" );
+					return false;
+				},
+				error: true
+			}
+		];
 	} );
 
 		ajaxTest( "jQuery.ajax() - data - process string with GET", 2, function( assert ) {
@@ -1626,6 +1819,7 @@ QUnit.module( "ajax", {
 	var ifModifiedNow = new Date();
 
 	jQuery.each(
+
 		/* jQuery.each arguments start */
 		{
 			" (cache)": true,
@@ -1635,23 +1829,15 @@ QUnit.module( "ajax", {
 			jQuery.each(
 				{
 					"If-Modified-Since": {
-						url: "mock.php?action=ims",
-						qunitMethod: "test"
+						url: "mock.php?action=ims"
 					},
 					"Etag": {
-						url: "mock.php?action=etag",
-
-						// Support: TestSwarm
-						// TestSwarm is now proxied via Cloudflare which cuts out
-						// headers relevant for ETag tests, failing them. We're still
-						// running those tests in Karma on Chrome & Firefox (including
-						// Firefox ESR).
-						qunitMethod: QUnit.isSwarm ? "skip" : "test"
+						url: "mock.php?action=etag"
 					}
 				},
 				function( type, data ) {
 					var url = baseURL + data.url + "&ts=" + ifModifiedNow++;
-					QUnit[ data.qunitMethod ]( "jQuery.ajax() - " + type +
+					QUnit.test( "jQuery.ajax() - " + type +
 							" support" + label, function( assert ) {
 						assert.expect( 4 );
 						var done = assert.async();
@@ -1680,6 +1866,7 @@ QUnit.module( "ajax", {
 				}
 			);
 		}
+
 		/* jQuery.each arguments end */
 	);
 
@@ -1750,6 +1937,7 @@ QUnit.module( "ajax", {
 		}
 
 		jQuery.each(
+
 			/* jQuery.each arguments start */
 			{
 				"name.html": true,
@@ -1824,6 +2012,7 @@ QUnit.module( "ajax", {
 				} );
 
 			}
+
 			/* jQuery.each arguments end*/
 		);
 	} );
@@ -2270,7 +2459,7 @@ if ( typeof window.ArrayBuffer === "undefined" || typeof new XMLHttpRequest().re
 	// beforeunload, unload, pagehide, and visibilitychange event handlers.
 	// See https://bugs.chromium.org/p/chromium/issues/detail?id=952452
 	// Safari 13 did similar changes. The below check will catch them both.
-	if ( !/safari/i.test( navigator.userAgent ) ) {
+	if ( !/webkit/i.test( navigator.userAgent ) ) {
 		testIframe(
 			"trac-14379 - jQuery.ajax() on unload",
 			"ajax/onunload.html",
@@ -2521,7 +2710,7 @@ if ( typeof window.ArrayBuffer === "undefined" || typeof new XMLHttpRequest().re
 	} );
 
 	QUnit.test(
-		"jQuery#load() - always use GET method even if it overrided through ajaxSetup (trac-11264)",
+		"jQuery#load() - always use GET method even if overridden through ajaxSetup (trac-11264)",
 		function( assert ) {
 			assert.expect( 1 );
 			var done = assert.async();
@@ -2625,10 +2814,10 @@ if ( typeof window.ArrayBuffer === "undefined" || typeof new XMLHttpRequest().re
 			},
 			function( json ) {
 				assert.ok( json.length >= 2, "Check length" );
-				assert.strictEqual( json[ 0 ][ "name" ], "John", "Check JSON: first, name" );
-				assert.strictEqual( json[ 0 ][ "age" ], 21, "Check JSON: first, age" );
-				assert.strictEqual( json[ 1 ][ "name" ], "Peter", "Check JSON: second, name" );
-				assert.strictEqual( json[ 1 ][ "age" ], 25, "Check JSON: second, age" );
+				assert.strictEqual( json[ 0 ].name, "John", "Check JSON: first, name" );
+				assert.strictEqual( json[ 0 ].age, 21, "Check JSON: first, age" );
+				assert.strictEqual( json[ 1 ].name, "Peter", "Check JSON: second, name" );
+				assert.strictEqual( json[ 1 ].age, 25, "Check JSON: second, age" );
 				done();
 			}
 		);
@@ -2638,9 +2827,9 @@ if ( typeof window.ArrayBuffer === "undefined" || typeof new XMLHttpRequest().re
 		assert.expect( 2 );
 		var done = assert.async();
 		jQuery.getJSON( url( "mock.php?action=json" ), function( json ) {
-			if ( json && json[ "data" ] ) {
-				assert.strictEqual( json[ "data" ][ "lang" ], "en", "Check JSON: lang" );
-				assert.strictEqual( json[ "data" ].length, 25, "Check JSON: length" );
+			if ( json && json.data ) {
+				assert.strictEqual( json.data.lang, "en", "Check JSON: lang" );
+				assert.strictEqual( json.data.length, 25, "Check JSON: length" );
 				done();
 			}
 		} );
@@ -2680,7 +2869,7 @@ if ( typeof window.ArrayBuffer === "undefined" || typeof new XMLHttpRequest().re
 
 			Globals.register( "testBar" );
 			jQuery.getScript( url( "mock.php?action=testbar" ), function() {
-				assert.strictEqual( window[ "testBar" ], "bar", "Check if script was evaluated" );
+				assert.strictEqual( window.testBar, "bar", "Check if script was evaluated" );
 				done();
 			} );
 		}
@@ -2711,7 +2900,7 @@ if ( typeof window.ArrayBuffer === "undefined" || typeof new XMLHttpRequest().re
 		jQuery.getScript( {
 			url: url( "mock.php?action=testbar" ),
 			success: function() {
-				assert.strictEqual( window[ "testBar" ], "bar", "Check if script was evaluated" );
+				assert.strictEqual( window.testBar, "bar", "Check if script was evaluated" );
 				done();
 			}
 		} );
@@ -2813,7 +3002,7 @@ if ( typeof window.ArrayBuffer === "undefined" || typeof new XMLHttpRequest().re
 		assert.expect( 7 );
 		var done = assert.async();
 		var verifyEvaluation = function() {
-			assert.strictEqual( window[ "testBar" ], "bar", "Check if script src was evaluated after load" );
+			assert.strictEqual( window.testBar, "bar", "Check if script src was evaluated after load" );
 			assert.strictEqual( jQuery( "#ap" ).html(), "bar", "Check if script evaluation has modified DOM" );
 			done();
 		};
@@ -2824,7 +3013,7 @@ if ( typeof window.ArrayBuffer === "undefined" || typeof new XMLHttpRequest().re
 		jQuery( "#first" ).load( url( "mock.php?action=testHTML&baseURL=" + baseURL ), function() {
 			assert.ok( jQuery( "#first" ).html().match( /^html text/ ), "Check content after loading html" );
 			assert.strictEqual( jQuery( "#foo" ).html(), "foo", "Check if script evaluation has modified DOM" );
-			assert.strictEqual( window[ "testFoo" ], "foo", "Check if script was evaluated after load" );
+			assert.strictEqual( window.testFoo, "foo", "Check if script was evaluated after load" );
 			setTimeout( verifyEvaluation, 600 );
 		} );
 	} );
@@ -2836,7 +3025,7 @@ if ( typeof window.ArrayBuffer === "undefined" || typeof new XMLHttpRequest().re
 
 		jQuery( "#first" ).load( url( "test2.html" ), function() {
 			assert.strictEqual( jQuery( "#foo" ).html(), "foo", "Check if script evaluation has modified DOM" );
-			assert.strictEqual( window[ "testFoo" ], "foo", "Check if script was evaluated after load" );
+			assert.strictEqual( window.testFoo, "foo", "Check if script was evaluated after load" );
 			done();
 		} );
 	} );
@@ -3047,6 +3236,72 @@ if ( typeof window.ArrayBuffer === "undefined" || typeof new XMLHttpRequest().re
 	QUnit.test( "jQuery.active", function( assert ) {
 		assert.expect( 1 );
 		assert.ok( jQuery.active === 0, "ajax active counter should be zero: " + jQuery.active );
+	} );
+
+	ajaxTest( "jQuery.ajax() - FormData", 1, function( assert ) {
+		var formData = new FormData();
+		formData.append( "key1", "value1" );
+		formData.append( "key2", "value2" );
+
+		return {
+			url: url( "mock.php?action=formData" ),
+			method: "post",
+			data: formData,
+			success: function( data ) {
+				assert.strictEqual( data, "key1 -> value1, key2 -> value2",
+					"FormData sent correctly" );
+			}
+		};
+	} );
+
+	ajaxTest( "jQuery.ajax() - URLSearchParams", 1, function( assert ) {
+		var urlSearchParams = new URLSearchParams();
+		urlSearchParams.append( "name", "peter" );
+
+		return {
+			url: url( "mock.php?action=name" ),
+			method: "post",
+			data: urlSearchParams,
+			success: function( data ) {
+				assert.strictEqual( data, "pan", "URLSearchParams sent correctly" );
+			}
+		};
+	}, QUnit.testUnlessIE );
+
+	ajaxTest( "jQuery.ajax() - Blob", 1, function( assert ) {
+		var blob = new Blob( [ "name=peter" ], { type: "text/plain" } );
+
+		return {
+			url: url( "mock.php?action=name" ),
+			method: "post",
+			data: blob,
+			success: function( data ) {
+				assert.strictEqual( data, "pan", "Blob sent correctly" );
+			}
+		};
+	} );
+
+	ajaxTest( "jQuery.ajax() - non-plain object", 1, function( assert ) {
+		return {
+			url: url( "mock.php?action=name" ),
+			method: "post",
+			data: Object.create( { name: "peter" } ),
+			success: function( data ) {
+				assert.strictEqual( data, "ERROR", "Data correctly not sent" );
+			}
+		};
+	} );
+
+	ajaxTest( "jQuery.ajax() - non-plain object with processData: true", 1, function( assert ) {
+		return {
+			url: url( "mock.php?action=name" ),
+			method: "post",
+			processData: true,
+			data: Object.create( { name: "peter" } ),
+			success: function( data ) {
+				assert.strictEqual( data, "pan", "Data sent correctly" );
+			}
+		};
 	} );
 
 } )();

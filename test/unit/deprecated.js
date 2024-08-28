@@ -46,8 +46,12 @@ QUnit.test( "hover() mouseenter mouseleave", function( assert ) {
 	assert.expect( 1 );
 
 	var times = 0,
-		handler1 = function() { ++times; },
-		handler2 = function() { ++times; };
+		handler1 = function() {
+ ++times;
+},
+		handler2 = function() {
+ ++times;
+};
 
 	jQuery( "#firstp" )
 		.hover( handler1, handler2 )
@@ -89,15 +93,15 @@ QUnit.test( "trigger() shortcuts", function( assert ) {
 	assert.equal( counter, 1, "Check that click, triggers onclick event handler also" );
 
 	clickCounter = 0;
-	jQuery( "#simon1" )[ 0 ].onclick = function() {
+	jQuery( "#john1" )[ 0 ].onclick = function() {
 		clickCounter++;
 	};
-	jQuery( "#simon1" ).click();
+	jQuery( "#john1" ).click();
 	assert.equal( clickCounter, 1, "Check that click, triggers onclick event handler on an a tag also" );
 } );
 
 if ( includesModule( "ajax" ) ) {
-	ajaxTest( "jQuery.ajax() - events with context", 12, function( assert ) {
+	ajaxTest( "Ajax events aliases (with context)", 12, function( assert ) {
 		var context = document.createElement( "div" );
 
 		function event( e ) {
@@ -113,10 +117,10 @@ if ( includesModule( "ajax" ) ) {
 		return {
 			setup: function() {
 				jQuery( context ).appendTo( "#foo" )
-					.on( "ajaxSend", event )
-					.on( "ajaxComplete", event )
-					.on( "ajaxError", event )
-					.on( "ajaxSuccess", event );
+					.ajaxSend( event )
+					.ajaxComplete( event )
+					.ajaxError( event )
+					.ajaxSuccess( event );
 			},
 			requests: [ {
 				url: url( "name.html" ),

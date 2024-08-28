@@ -240,7 +240,7 @@ QUnit.test( "outerWidth()", function( assert ) {
 } );
 
 QUnit.test( "outerHeight()", function( assert ) {
-	assert.expect( 12 );
+	assert.expect( 14 );
 
 	var $div, div,
 		$win = jQuery( window ),
@@ -268,6 +268,11 @@ QUnit.test( "outerHeight()", function( assert ) {
 	$div.css( "display", "none" );
 	assert.equal( $div.outerHeight( true ), 94, "Test hidden div with padding, border and margin with margin option" );
 
+	$div.css( "display", "" );
+	$div.css( "margin", "-10px" );
+	assert.equal( $div.outerHeight(), 74, "Test with padding, border and negative margin without margin option" );
+	assert.equal( $div.outerHeight( true ), 54, "Test with padding, border and negative margin with margin option" );
+
 	// reset styles
 	$div.css( { "position": "", "display": "", "border": "", "padding": "", "width": "", "height": "" } );
 
@@ -277,6 +282,30 @@ QUnit.test( "outerHeight()", function( assert ) {
 	assert.equal( div.outerWidth(), 0, "Make sure that disconnected nodes are handled." );
 
 	div.remove();
+} );
+
+QUnit.test( "fractional getters", function( assert ) {
+	assert.expect( 8 );
+
+	var elem = jQuery( "<div>" ).css( {
+		width: "10.5px",
+		height: "20.5px",
+		border: "10px solid white",
+		padding: "2px",
+		margin: "3px"
+	} );
+
+	elem.appendTo( "#qunit-fixture" );
+
+	assert.strictEqual( elem.width(), 10.5, "width supports fractions" );
+	assert.strictEqual( elem.innerWidth(), 14.5, "innerWidth supports fractions" );
+	assert.strictEqual( elem.outerWidth(), 34.5, "outerWidth supports fractions" );
+	assert.strictEqual( elem.outerWidth( true ), 40.5, "outerWidth( true ) supports fractions" );
+
+	assert.strictEqual( elem.height(), 20.5, "height supports fractions" );
+	assert.strictEqual( elem.innerHeight(), 24.5, "innerHeight supports fractions" );
+	assert.strictEqual( elem.outerHeight(), 44.5, "outerHeight supports fractions" );
+	assert.strictEqual( elem.outerHeight( true ), 50.5, "outerHeight( true ) supports fractions" );
 } );
 
 QUnit.test( "child of a hidden elem (or unconnected node) has accurate inner/outer/Width()/Height()  see trac-9441 trac-9300", function( assert ) {

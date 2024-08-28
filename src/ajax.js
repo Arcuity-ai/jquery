@@ -1,9 +1,9 @@
-import jQuery from "./core.js";
-import document from "./var/document.js";
-import rnothtmlwhite from "./var/rnothtmlwhite.js";
-import location from "./ajax/var/location.js";
-import nonce from "./ajax/var/nonce.js";
-import rquery from "./ajax/var/rquery.js";
+import { jQuery } from "./core.js";
+import { document } from "./var/document.js";
+import { rnothtmlwhite } from "./var/rnothtmlwhite.js";
+import { location } from "./ajax/var/location.js";
+import { nonce } from "./ajax/var/nonce.js";
+import { rquery } from "./ajax/var/rquery.js";
 
 import "./core/init.js";
 import "./core/parseXML.js";
@@ -562,13 +562,13 @@ jQuery.extend( {
 			}
 		}
 
+		// Apply prefilters
+		inspectPrefiltersOrTransports( prefilters, s, options, jqXHR );
+
 		// Convert data if not already a string
 		if ( s.data && s.processData && typeof s.data !== "string" ) {
 			s.data = jQuery.param( s.data, s.traditional );
 		}
-
-		// Apply prefilters
-		inspectPrefiltersOrTransports( prefilters, s, options, jqXHR );
 
 		// If request was aborted inside a prefilter, stop there
 		if ( completed ) {
@@ -874,4 +874,4 @@ jQuery.ajaxPrefilter( function( s ) {
 	}
 } );
 
-export default jQuery;
+export { jQuery, jQuery as $ };
