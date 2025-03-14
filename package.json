@@ -102,7 +102,7 @@
   "license": "MIT",
   "devDependencies": {
     "@babel/cli": "7.24.8",
-    "@babel/core": "7.24.9",
+    "@babel/core": "7.26.10",
     "@babel/plugin-transform-for-of": "7.24.7",
     "@prantlf/jsonlint": "14.0.3",
     "@rollup/plugin-commonjs": "26.0.1",
