@@ -133,7 +133,7 @@
     "q": "1.5.1",
     "qunit": "2.21.1",
     "raw-body": "2.5.2",
-    "release-it": "17.6.0",
+    "release-it": "19.0.0",
     "requirejs": "2.3.7",
     "rimraf": "6.0.1",
     "rollup": "4.19.0",
